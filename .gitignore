@@ -3,6 +3,14 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+.DS_Store
+
+#json files
+*.json
+
+#word doc files
+*.docx
+
 # C extensions
 *.so
 
