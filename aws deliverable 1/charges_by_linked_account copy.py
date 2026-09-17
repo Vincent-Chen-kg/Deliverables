@@ -1,4 +1,5 @@
 import boto3
+from pathlib import Path
 from datetime import datetime, timedelta
 from docx import Document
 from docx.shared import Pt, RGBColor
@@ -9,6 +10,8 @@ from botocore.exceptions import ClientError
 import json
 
 # Net of credits, refunds, and negotiated discounts, i.e. what actually gets invoiced.
+
+TEMPLATE_DIR =  Path(__file__).resolve().parents[1]/"templates"
 COST_METRIC = "NetUnblendedCost"
 file_path= "exceptions.json"
 cum_start_date = "2026-06-13"
@@ -128,7 +131,7 @@ def generate_styled_aws_cost_docx(start_date: str, end_date: str, query_end_date
     )
 
     # 4. Build Document
-    doc = Document("template.docx")
+    doc = Document(TEMPLATE_DIR / "template1.docx")
 
     build_cost_table(
         doc,
