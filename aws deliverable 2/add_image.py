@@ -124,6 +124,9 @@ def add_text_to_paragraphs(doc:Document, section_name: str, output_path: str, mo
 
 async def main(path: str=".", date: str | None = None, template: str = TEMPLATE_DIR / "template2.docx"
 ) -> None:
+    if not Path(template).exists():
+        raise FileNotFoundError(f"Template not found at {template}")
+        
     # Handle dynamic default arguments cleanly
     month = date or datetime.now().strftime("%B %Y")
 
@@ -138,15 +141,20 @@ async def main(path: str=".", date: str | None = None, template: str = TEMPLATE_
     )
     print(f"Finished processing. Total images inserted: {inserted}")
     
-    add_text_to_paragraphs(
-        doc=doc, 
-        output_path=output_path, 
-        json_path="executive_summaries.json",
-        section_name="sections",
-        style= "heading", 
-        indentifier= "Executive summary",
-        month = month
+    ex_sum_path = "executive_summaries.json"
+    if Path(ex_sum_path).exists():
+        add_text_to_paragraphs(
+            doc=doc, 
+            output_path=output_path, 
+            json_path=ex_sum_path,
+            section_name="sections",
+            style= "heading", 
+            indentifier= "Executive summary",
+            month = month
         )
+    else:
+        print(f"Executive summaries JSON not found at {ex_sum_path}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

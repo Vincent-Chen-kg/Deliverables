@@ -6,7 +6,7 @@ __pycache__/
 .DS_Store
 
 #json files
-#exceptions.json
+*.json
 
 #word doc files
 *.docx
