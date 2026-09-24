@@ -1,0 +1,5 @@
+aioboto3
+python-docx
+playwright
+requests
+pyparsing

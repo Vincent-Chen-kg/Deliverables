@@ -7,13 +7,15 @@ from pathlib import Path
 from datetime import datetime,timedelta
 import asyncio
 from playwright.async_api import async_playwright
-import add_image
+from .add_image import main as add_image
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
 ROLE_SESSION_NAME = "PlaywrightConsoleSession"
 
 CE_CONSOLE = "https://us-east-1.console.aws.amazon.com/cost-management/home?region=us-east-1"
+
+debug = False
 
 CAPTURES = {
     "Cost Comparison Overview.png": lambda page: (
@@ -78,10 +80,12 @@ def cost_explorer_url(start_date: str, end_date: str) -> str:
 def get_federated_console_url(start_date, end_date,profile_name="default"):
     session = boto3.Session(profile_name=profile_name)
     sts_client = session.client("sts")
-
-    with open("role.json", "r") as f:
-        data = json.load(f)
-        arn = data.get("arn")
+    try:
+        with open("role.json", "r") as f:
+            data = json.load(f)
+            arn = data.get("arn")
+    except FileNotFoundError:
+        raise FileNotFoundError("role.json file not found in main directory or ARN not specified.")
 
     # Assume role to get valid federated credentials
     assumed_role = sts_client.assume_role(
@@ -115,31 +119,46 @@ def get_federated_console_url(start_date, end_date,profile_name="default"):
         f"SigninToken={signin_token}"
     )
 
-async def capture_dashboard_screenshot(start_date: str, end_date: str, month: str) -> Path:
-    folder = SCRIPT_DIR / Path("deliverables") / month
-    folder.mkdir(parents=True, exist_ok=True)
+async def capture_dashboard_screenshot(start_date: str, end_date: str, deli_dir: Path, **kwargs) -> Path:
 
     login_url = get_federated_console_url(start_date, end_date, profile_name="default")
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=not debug)
         #try:
+        
         context = await browser.new_context(viewport={"width": 1920, "height": 1080})
         page = await context.new_page()
+
+        await page.add_init_script("""
+        document.addEventListener('DOMContentLoaded', () => {
+            const s = document.createElement('style');
+            s.textContent = `[class*="awsui_toolbar-container"],
+                            [class*="awsui_navigation-container"],
+                            #awsccc-cb-c { display: none !important; }`;
+            document.head.appendChild(s);
+        });
+        """)
         await page.goto(login_url)
-
+        
+        #be aware that the locator value might change if AWS updates their UI. It used to use "recharts-bar-rectangle" but now uses highcharts. Adjust accordingly if the locator fails.
         chart = page.locator('[data-testid="ce-cost-chart"]')
-        await chart.wait_for(state="visible")
-        await chart.locator(".recharts-bar-rectangle").first.wait_for()
-
+        await chart.locator(".highcharts-root").wait_for(state="visible")
+        await chart.locator(".highcharts-series-group .highcharts-point").first.wait_for()
+#         print(await page.evaluate("""() =>
+#   [...document.querySelectorAll('body *')]
+#     .filter(e => ['fixed','sticky'].includes(getComputedStyle(e).position))
+#     .map(e => e.tagName + '#' + e.id + '.' + (e.className || '').toString().slice(0, 60))
+#     .slice(0, 40)
+# """)) 
         for file_name, build in CAPTURES.items():
             widget = build(page)
             await widget.scroll_into_view_if_needed()
-            await widget.screenshot(path=SCRIPT_DIR / folder / file_name)
+            await widget.screenshot(path=SCRIPT_DIR / deli_dir / file_name, animations="disabled")
         #finally:
         await browser.close()
 
-    return folder
+    return deli_dir
 
 def get_previous_month_parameters(date):
     first_day_this_month = date.replace(day=1)
@@ -151,17 +170,16 @@ def get_previous_month_parameters(date):
     query_end_date = first_day_this_month.strftime('%Y-%m-%d')
     return {"start_date":start_date, "end_date": query_end_date, "month" : datetime.strptime(start_date, "%Y-%m-%d").strftime("%Y %B")}
 
-
-if __name__ == "__main__":
-
+async def main(path: str=".", date: str | None = None) -> None:
     today = datetime.now().date()
-    #print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     query = get_previous_month_parameters(today)
     print(query)
-    folder = asyncio.run(capture_dashboard_screenshot(**query))
+    folder = await capture_dashboard_screenshot(**query)
     print (f"The screenshots were added to {folder}")
 
     month_year =  datetime.strptime(query["start_date"], "%Y-%m-%d").strftime("%B %Y")
-
     print(month_year)
-    asyncio.run(add_image.main(folder, month_year))
+    await add_image(folder, month_year)
+
+if __name__ == "__main__":
+    asyncio.run(main())

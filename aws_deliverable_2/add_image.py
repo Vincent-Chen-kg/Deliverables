@@ -12,7 +12,7 @@ TEMPLATE_DIR =  PARENT_DIR / "templates"
 
 def load_manifest(json_path: str, key) -> list:
     """Reads the JSON manifest and returns a set of registered image titles."""
-    path = SCRIPT_DIR / Path(json_path)
+    path = Path(json_path)
     if not path.is_file():
         raise FileNotFoundError(f"Manifest not found at {json_path}")
         
@@ -61,7 +61,7 @@ def _sync_process_document(
     image_width: float
 ) -> int:
     """Synchronous pipeline that combines I/O, matching, and editing."""
-    manifest = set(load_manifest(json_path, "images"))
+    manifest = set(load_manifest(SCRIPT_DIR / json_path, "images"))
     inserted_count = 0
 
     print("--- Processing Paragraphs ---")
@@ -89,7 +89,8 @@ async def add_image_after_figure_label_async(
     target_style: str = "figure title",
     json_path: str = "images.json",
     path: str =  ".",
-    image_width: float = 6.5
+    image_width: float = 6.5,
+    **kwargs
 ) -> int:
     """Non-blocking async wrapper to process docx files."""
     return await asyncio.to_thread(
@@ -104,7 +105,7 @@ async def add_image_after_figure_label_async(
 
 
 def add_text_to_paragraphs(doc:Document, section_name: str, output_path: str, month, style:str, indentifier: str, json_path: str):
-    sections = load_manifest(json_path,section_name)
+    sections = load_manifest(PARENT_DIR / json_path,section_name)
 
     for index, paragraph in find_paragraphs_by_style(doc, style):
         title = paragraph.text.strip()
@@ -114,8 +115,8 @@ def add_text_to_paragraphs(doc:Document, section_name: str, output_path: str, mo
         section_num = int(title.split(".", 1)[0])-1
 
         print(f"Matched Paragraph {index} [{paragraph.style.name}]: '{title}'")
-        run = get_below_paragraph(doc, index)
-        if section_num > len(sections):
+        if section_num < len(sections):
+            run = get_below_paragraph(doc, index)
             run.text +=sections[section_num].format(target_date=month)
         break
 
@@ -154,6 +155,8 @@ async def main(path: str=".", date: str | None = None, template: str = TEMPLATE_
         )
     else:
         print(f"Executive summaries JSON not found at {ex_sum_path}")
+    
+    print(f"\nSaved modified document to: {output_path}")
 
 
 if __name__ == "__main__":
